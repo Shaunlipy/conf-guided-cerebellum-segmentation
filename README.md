@@ -1,1 +1,1 @@
-# conf-guided-cerebellum-segmentaiton
+# conf-guided-cerebellum-segmentation

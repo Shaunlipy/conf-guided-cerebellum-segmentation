@@ -1,0 +1,89 @@
+import torch
+from torch.utils.data import Dataset
+import cv2
+import albumentations as A
+import os
+import numpy as np
+from torchvision import transforms
+
+
+class AllenDataset(Dataset):
+    def __init__(self, cfg, train_file, val_file, file_prefix, anno_prefix, mode='train'):
+        if mode == 'train':
+            with open(train_file, 'r') as file:
+                self.file = file.readlines()
+        elif mode == 'val':
+            with open(val_file, 'r') as file:
+                self.file = file.readlines()
+        self.file_prefix = file_prefix
+        self.anno_prefix = anno_prefix
+        self.num_classes = cfg.num_classes
+        self.img_h = cfg.img_h
+        self.img_w = cfg.img_w
+        self.crop_h = cfg.crop_h
+        self.crop_w = cfg.crop_w
+        self.mode = mode
+        self.mean = (0.5, 0.5, 0.5)
+        self.std = (0.5, 0.5, 0.5)
+        self.transform_1 = self.step_1_transform()
+        self.transform_c = self.center_transform()
+
+    def step_1_transform(self):
+        transform = A.Compose([
+            A.RandomCrop(height=self.crop_h, width=self.crop_w),
+            A.Flip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            A.Rotate(limit=45, interpolation=cv2.INTER_NEAREST),
+            A.Resize(height=self.img_h, width=self.img_w, interpolation=cv2.INTER_NEAREST),
+            A.Equalize(p=0.5),
+            A.MedianBlur(p=0.5),
+            A.CLAHE(p=0.5),
+            A.RandomBrightnessContrast(p=0.5),
+            A.RandomGamma(p=0.5)
+        ])
+        return transform
+
+    def center_transform(self):
+        transform = A.Compose([
+            A.CenterCrop(height=self.crop_h, width=self.crop_w),
+            A.Flip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            A.Rotate(limit=45, interpolation=cv2.INTER_NEAREST),
+            A.Resize(height=self.img_h, width=self.img_w, interpolation=cv2.INTER_NEAREST),
+            A.Equalize(p=0.5),
+            A.MedianBlur(p=0.5),
+            A.CLAHE(p=0.5),
+            A.RandomBrightnessContrast(p=0.5),
+            A.RandomGamma(p=0.5)
+        ])
+        return transform
+
+    def __getitem__(self, index):
+        entry = self.file[index % len(self.file)].rstrip()
+        img_path, _ = entry.split(',')
+        try:
+            img = cv2.imread(os.path.join(self.file_prefix, img_path))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            mask = cv2.imread(os.path.join(self.anno_prefix, img_path))
+            mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+        except Exception as e:
+            print(e, entry)
+        found = False
+        for i in range(10):
+            transformed = self.transform_1(image=img, mask=mask)
+            img_t = transformed['image']
+            mask_t = transformed['mask']
+            if len(np.unique(mask_t)) >= 3:
+                found = True
+                break
+        if not found:
+            transformed = self.transform_c(image=img, mask=mask)
+            img_t = transformed['image']
+            mask_t = transformed['mask']
+        img_t = (torch.from_numpy(img_t) / 255.0 - 0.5) / 0.5
+        img_t = img_t.unsqueeze(0)
+        mask_tensor = torch.from_numpy(mask_t).long()
+        return {'x': img_t, 'y': mask_tensor, 'file': entry}
+
+    def __len__(self):
+        return len(self.file)

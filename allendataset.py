@@ -4,25 +4,17 @@ import cv2
 import albumentations as A
 import os
 import numpy as np
-from torchvision import transforms
+import glob
 
 
 class AllenDataset(Dataset):
-    def __init__(self, cfg, train_file, val_file, file_prefix, anno_prefix, mode='train'):
-        if mode == 'train':
-            with open(train_file, 'r') as file:
-                self.file = file.readlines()
-        elif mode == 'val':
-            with open(val_file, 'r') as file:
-                self.file = file.readlines()
-        self.file_prefix = file_prefix
-        self.anno_prefix = anno_prefix
+    def __init__(self, cfg):
+        self.file = sorted(glob.glob(os.path.join(cfg.dataroot, 'A_cycle_input/*.png')))
         self.num_classes = cfg.num_classes
         self.img_h = cfg.img_h
         self.img_w = cfg.img_w
         self.crop_h = cfg.crop_h
         self.crop_w = cfg.crop_w
-        self.mode = mode
         self.mean = (0.5, 0.5, 0.5)
         self.std = (0.5, 0.5, 0.5)
         self.transform_1 = self.step_1_transform()
@@ -59,15 +51,12 @@ class AllenDataset(Dataset):
         return transform
 
     def __getitem__(self, index):
-        entry = self.file[index % len(self.file)].rstrip()
-        img_path, _ = entry.split(',')
-        try:
-            img = cv2.imread(os.path.join(self.file_prefix, img_path))
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            mask = cv2.imread(os.path.join(self.anno_prefix, img_path))
-            mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-        except Exception as e:
-            print(e, entry)
+        img_path = self.file[index % len(self.file)].rstrip()
+        mask_path = img_path.replace('A_cycle_input', 'AB_annotation')
+        img = cv2.imread(img_path)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        mask = cv2.imread(mask_path)
+        mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         found = False
         for i in range(10):
             transformed = self.transform_1(image=img, mask=mask)
@@ -83,7 +72,7 @@ class AllenDataset(Dataset):
         img_t = (torch.from_numpy(img_t) / 255.0 - 0.5) / 0.5
         img_t = img_t.unsqueeze(0)
         mask_tensor = torch.from_numpy(mask_t).long()
-        return {'x': img_t, 'y': mask_tensor, 'file': entry}
+        return {'x': img_t, 'y': mask_tensor, 'file': img_path}
 
     def __len__(self):
         return len(self.file)

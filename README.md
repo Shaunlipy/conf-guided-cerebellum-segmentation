@@ -29,7 +29,7 @@ BB data input patches
 
 ## Training
 
-To train the model.
+To train the model, please refer to [Pytorch-CycleGAN](https://github.com/aitorzip/PyTorch-CycleGAN) for stage 1 _Distribution Transfer_. Here we provide transferred AB_input for stage 2 _Confidence-Guided Self-Training_:  
 
 <ol>
     <li> download and unzip all datasets (AB_input, AB_annotation, and BB_input) in to one root folder.
@@ -59,3 +59,10 @@ python train.py --exp 1 --dataroot PathToYourDataroot
 ```
 
 ** replace --exp 1 with corresponding iteration **
+
+## Results
+
+![result1](./Images/res1.png)
+![result2](./Images/res2.png)
+![result3](./Images/res3.png)
+![result4](./Images/res4.png)
